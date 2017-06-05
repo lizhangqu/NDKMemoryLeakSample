@@ -1,0 +1,28 @@
+/**
+ * 是否是debug
+ * @return
+ */
+boolean isDebug() {
+    boolean ret = false
+    try {
+        Properties properties = new Properties()
+        File file = project.rootProject.file('local.properties')
+        if (!file.exists()) {
+            return false
+        }
+        properties.load(file.newDataInputStream())
+        String debugStr = properties.getProperty("debug")
+        if (debugStr != null && debugStr.length() > 0) {
+            ret = debugStr.toBoolean()
+        }
+    } catch (Throwable throwable) {
+        throwable.printStackTrace()
+        ret = false
+    }
+    project.logger.error("[${project.name}]Debug:${ret}")
+    return ret
+}
+
+ext {
+    isDebug = this.&isDebug
+}

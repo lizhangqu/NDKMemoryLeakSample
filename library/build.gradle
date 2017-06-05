@@ -1,0 +1,67 @@
+//公共函数
+apply from: "${project.rootProject.file('common_function.gradle')}"
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion global_compileSdkVersion
+    buildToolsVersion global_buildToolsVersion
+
+
+    defaultConfig {
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        if (isDebug()) {
+            publishNonDefault true
+        }
+        minSdkVersion MIN_SDK_VERSION
+        targetSdkVersion TARGET_SDK_VERSION
+
+
+        ndk {
+            abiFilters isDebug() ? global_debug_abiFilters : global_abiFilters
+        }
+
+        externalNativeBuild {
+            cmake {
+                cFlags global_cFlags
+                cppFlags global_cppFlags
+                arguments global_arguments
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path project.file("src/main/cpp/CMakeLists.txt")
+        }
+    }
+
+
+    if (isDebug()) {
+        packagingOptions {
+            doNotStrip "*/armeabi/*.so"
+            doNotStrip "*/armeabi-v7a/*.so"
+            doNotStrip "*/arm64-v8a/*.so"
+            doNotStrip "*/x86/*.so"
+            doNotStrip "*/x86_64/*.so"
+            doNotStrip "*/mips/*.so"
+            doNotStrip "*/mips64/*.so"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    provided "com.android.support:support-annotations:${SUPPORT_VERSION}"
+    testCompile 'junit:junit:4.12'
+}

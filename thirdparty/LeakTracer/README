@@ -1,0 +1,184 @@
+Library: LeakTracer
+Homepage: http://www.andreasen.org/LeakTracer/
+Maintainer: Frederic GERMAIN
+Bug reports: https://github.com/fredericgermain/LeakTracer/issues
+License (library): LGPLv2.1+
+License (manual and tools): GPLv2+
+
+
+General Information
+===================
+
+This library is designed to be a nice complement of valgrind and libduma (ex efence) to
+detect leak memory. It simply override C/C++ allocation function (new, malloc, ...) to
+keep then in a simple list that could be analysed later. The effective allocation is
+still done by the underlying libc.
+It can be used when valgrind is not ported on your platform, when libduma is using too
+much virtual memory (embedded system), or when you're really interested in tracking only
+memory leaks.
+You may start/stop/dump monitoring allocation from the first allocation, when the program
+receive a signal (for ex. SIGUSR1), or when you explicitly call a LeakTracer function.
+
+
+The following documentation is inspired by DUMA, which is quite similar to use.
+
+
+Installation
+============
+
+See the file 'INSTALL'
+
+
+Usage
+=====
+
+3 ways to load the libleaktracer library :
+* Link your program with libleaktracer.a
+* Link your program with libleaktracer.so. You need the option -lleaktracer to be the
+first of your link command. You should see leaktracer.so as the first NEEDED entry of
+the Dynamic Section when you do a "objdump -p" of your program (through this check is
+really dependent of your binary loader)
+* use the LD_PRELOAD environment variable to be sure it is loaded before any other library.
+You don't need to change your program using this method. You can then customize LeakTracer
+behaviour using Environment variables.
+
+
+In any case your application must also be compiled with debugging symbols enabled
+(i.e. -g), so that you can lookup part of code that leaked with your source code.
+
+
+Environment variables
+=====================
+
+LeakTracer has several configuration switches that can be enabled via
+the shell environment. These switches change how LeakTracer will behave, so
+it's important to know them.
+
+
+LEAKTRACER_NOBANNER - Prevent LeakTracer to announce itself on stderr when it load.
+
+LEAKTRACER_ONSIG_STARTALLTHREAD - If set, install a signal handler that will start allocation
+  monitoring on the threads.
+  Supported value are SIGUSR1, SIGUSR2 or a signal number for now.
+
+LEAKTRACER_ONSIG_STOPALLTHREAD - If set, install a signal handler that will stop allocation
+  monitoring on the threads.
+  Supported value are SIGUSR1, SIGUSR2 or a signal number for now.
+
+LEAKTRACER_ONSIG_REPORT - If set, install a signal handler that will write a raw LeakTracer
+  report in the file LEAKTRACER_ONSIG_REPORTFILENAME.
+  Supported value are SIGUSR1, SIGUSR2 or a signal number for now.
+
+LEAKTRACER_ONSIG_REPORTFILENAME - Name of a file where a report will be dump on a LEAKTRACER_ONSIG_REPORT.
+
+LEAKTRACER_ONSTART_STARTALLTHREAD - If set, start monitoring all allocation from the first allocation made.
+
+LEAKTRACER_ONEXIT_REPORT - If set, write a raw LeakTracer report in the file
+   LEAKTRACER_ONEXIT_REPORTFILENAME when program exit.
+
+LEAKTRACER_ONEXIT_REPORTFILENAME -
+
+LEAKTRACER_AUTO_REPORTFILENAME - Equivalent to LEAKTRACER_ONSTART_STARTALLTHREAD=1
+  LEAKTRACER_ONEXIT_REPORT=1 LEAKTRACER_ONEXIT_REPORTFILENAME=$LEAKTRACER_AUTO_REPORTFILENAME
+
+
+Example:
+LD_PRELOAD=/usr/lib/libleaktracer.so LEAKTRACER_AUTO_REPORTFILENAME=leaks.out /bin/ls
+
+
+LD_PRELOAD=/usr/lib/libleaktracer.so LEAKTRACER_ONSIG_STARTALLTHREAD=USR1 LEAKTRACER_ONSIG_REPORT=USR2 LEAKTRACER_ONSIG_REPORTFILENAME=leaks.out top
+killall -USR1 top
+...
+killall -USR2 top
+
+Sometimes, SIGUSR1 and SIGUSR2 are used. You can use RT signals, which are generally not used :
+LD_PRELOAD=/usr/lib/libleaktracer.so LEAKTRACER_ONSIG_STARTALLTHREAD=35 LEAKTRACER_ONSIG_REPORT=36 LEAKTRACER_ONSIG_REPORTFILENAME=leaks.out top
+
+
+Fine grained control of memory allocation
+=========================================
+You can use directly LeakTracer api to start/stop allocation monitoring, or to write reports to file.
+Two set of API are available, one in C, one in C++
+
+C API
+You should include file "leaktracer.h" in your program
+
+
+C++ API
+You should include file "MemoryTrace.hpp" in your program
+
+
+
+Catching the leak
+=================
+
+Once you have your leak report, find the call stacks which generate the leaks.
+The call stack is sequence of call where the leak appeared.
+
+To find the code that generate the leak given a memory address, several method can be used.
+* GDB/GDBSERVER: the most reliable method is to attach gdb or gdbserver to your program. When you're
+attach, type "break *addr" or "disassemble addr addr+10" to know where the leak appeared.
+The advantage of using a breakpoint is that you can find quickly how the leak happens.
+* You can activate the core dump support using "ulimit -c unlimited" in your shell. Generate a corefile
+with "kill -QUIT $pidprogram", and use gdb again to find the code that leak.
+* addr2line utility can give you an address given a program. But if your leak appear in a dynamic library,
+it won't give you the information.
+
+
+Analyzing output
+================
+
+You should then run leak-analyze, since looking at the raw leaks.out file will
+not help you much. You need perl to run it.
+Two versions of lead-analyze are provided:
+* one is using gdb to find the line of the leak in your source code. This is the best way so far.
+* one is using addr2line. To problem with is method is that it won't find the line in the dynamic libraries
+
+
+Help developping Leaktracer
+=========================
+You can use the debug mode to track problem in LeakTracer
+To do that, build in debug mode :
+> make DEBUG=1 clean all
+> gdb /bin/ls
+In gdb
+set environment LD_PRELOAD /usr/lib/libleaktracer.so
+set environment LEAKTRACER_AUTO_REPORTFILENAME leaks.out
+run
+...
+
+Note about implementation
+=========================
+
+* FG: I tried to first use LTS variable instead of pthread_key, but it looks like I was having a problem with them
+on a old uclibc problem.
+* On x86_64, gcc 4.5.2, or other platform, it looks like there is a crash in __builtin_frame_address(i) if i > 1. You should define
+ALLOCATION_STACK_DEPTH to 1, or define USE_BACKTRACE to use backtrace() function.
+
+
+Project history
+===============
+Original project is made by Erwin S. Andreasen
+Michael Gopshtein rewrite most of it to add nice start/stop and other functionalities.
+Frederic Germain added malloc/realloc/free support, and environment variable support to
+use LeakTracer without having to recompile your program.
+
+License was change to LGPL/GPL from version 3.0.
+If you're a original contributor and you have something to oppose to the license change, please contact
+me, I'll rewrite some code.
+
+
+
+Contact
+=======
+For any questions/problems/suggestions please contact
+Frederic Germain, frederic.germain@gmail.com
+
+
+
+Patches you want to be integrated
+=================================
+
+Use github to submit your patches. Git way to do it are preferred.
+
+Patches should be in unified diff form. (The -up option to GNU diff.)

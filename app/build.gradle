@@ -1,0 +1,52 @@
+//公共函数
+apply from: "${project.rootProject.file('common_function.gradle')}"
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion global_compileSdkVersion
+    buildToolsVersion global_buildToolsVersion
+    defaultConfig {
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        applicationId "io.github.lizhangqu.test.sample"
+        minSdkVersion MIN_SDK_VERSION
+        targetSdkVersion TARGET_SDK_VERSION
+        versionCode 1
+        versionName "1.0"
+
+        ndk {
+            abiFilters isDebug() ? global_debug_abiFilters : global_abiFilters
+        }
+    }
+
+    if (isDebug()) {
+        packagingOptions {
+            doNotStrip "*/armeabi/*.so"
+            doNotStrip "*/armeabi-v7a/*.so"
+            doNotStrip "*/arm64-v8a/*.so"
+            doNotStrip "*/x86/*.so"
+            doNotStrip "*/x86_64/*.so"
+            doNotStrip "*/mips/*.so"
+            doNotStrip "*/mips64/*.so"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile "com.android.support:appcompat-v7:${SUPPORT_VERSION}"
+
+    if (isDebug()) {
+        debugCompile project(path: ':library', configuration: "debug")
+        releaseCompile project(path: ':library', configuration: "release")
+    } else {
+        compile project(':library')
+    }
+}
